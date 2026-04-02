@@ -1,61 +1,91 @@
+from __future__ import annotations
+
+import re
+from typing import TYPE_CHECKING
+
 import httpx
 
 from .base import BaseSource, FoundResult
 from ..rate_limit import safe_get_or_none
+
+if TYPE_CHECKING:
+    from ..parser import RepoInfo
 
 
 class WaybackSource(BaseSource):
     name = "wayback"
 
     async def search(
-        self, owner: str, repo: str, session: httpx.AsyncClient
+        self, info: RepoInfo, session: httpx.AsyncClient
     ) -> list[FoundResult]:
         results = []
 
-        # Search for archived GitHub repo pages
+        # Strip scheme for CDX queries
+        origin_host_path = re.sub(r"^https?://", "", info.origin_url)
+
+        # Search for archived repo pages at the original URL
         repo_snapshots = await self._search_cdx(
-            session, f"github.com/{owner}/{repo}", limit=20
+            session, origin_host_path, limit=20
         )
         if repo_snapshots:
             latest = repo_snapshots[0]
             results.append(
                 FoundResult(
                     source_name="Wayback Machine",
-                    url=f"https://web.archive.org/web/{latest['timestamp']}/https://github.com/{owner}/{repo}",
-                    description=f"Archived GitHub page ({len(repo_snapshots)} snapshots found)",
+                    url=f"https://web.archive.org/web/{latest['timestamp']}/{info.origin_url}",
+                    description=f"Archived repo page ({len(repo_snapshots)} snapshots found)",
                     confidence="medium",
                     timestamp=self._format_timestamp(latest["timestamp"]),
                 )
             )
 
-        # Search for archived raw file content
-        raw_snapshots = await self._search_cdx(
-            session, f"raw.githubusercontent.com/{owner}/{repo}/*", limit=50
-        )
-        if raw_snapshots:
-            # Deduplicate by path
-            unique_paths = {}
-            for snap in raw_snapshots:
-                path = snap["original"]
-                if path not in unique_paths:
-                    unique_paths[path] = snap
-
-            results.append(
-                FoundResult(
-                    source_name="Wayback Machine (raw files)",
-                    url=f"https://web.archive.org/web/*/raw.githubusercontent.com/{owner}/{repo}/*",
-                    description=f"{len(unique_paths)} unique raw file(s) archived",
-                    confidence="medium",
-                    timestamp=self._format_timestamp(raw_snapshots[0]["timestamp"]),
-                )
+        # GitHub-specific: also check raw.githubusercontent.com and archive downloads
+        if info.platform == "github":
+            raw_snapshots = await self._search_cdx(
+                session,
+                f"raw.githubusercontent.com/{info.owner}/{info.repo}/*",
+                limit=50,
             )
+            if raw_snapshots:
+                unique_paths = {}
+                for snap in raw_snapshots:
+                    path = snap["original"]
+                    if path not in unique_paths:
+                        unique_paths[path] = snap
 
-        # Check for archived tarball/zip downloads
-        for pattern in [
-            f"github.com/{owner}/{repo}/archive/*",
-            f"codeload.github.com/{owner}/{repo}/*",
-        ]:
-            archive_snaps = await self._search_cdx(session, pattern, limit=5)
+                results.append(
+                    FoundResult(
+                        source_name="Wayback Machine (raw files)",
+                        url=f"https://web.archive.org/web/*/raw.githubusercontent.com/{info.owner}/{info.repo}/*",
+                        description=f"{len(unique_paths)} unique raw file(s) archived",
+                        confidence="medium",
+                        timestamp=self._format_timestamp(raw_snapshots[0]["timestamp"]),
+                    )
+                )
+
+            for pattern in [
+                f"github.com/{info.owner}/{info.repo}/archive/*",
+                f"codeload.github.com/{info.owner}/{info.repo}/*",
+            ]:
+                archive_snaps = await self._search_cdx(session, pattern, limit=5)
+                if archive_snaps:
+                    snap = archive_snaps[0]
+                    wb_url = f"https://web.archive.org/web/{snap['timestamp']}/{snap['original']}"
+                    results.append(
+                        FoundResult(
+                            source_name="Wayback Machine (archive download)",
+                            url=wb_url,
+                            description=f"Archived repo download: {snap['original'].split('/')[-1]}",
+                            confidence="medium",
+                            timestamp=self._format_timestamp(snap["timestamp"]),
+                        )
+                    )
+                    break
+
+        # For non-GitHub platforms, check archive/download patterns too
+        if info.platform in ("gitlab", "codeberg", "gitea", "notabug"):
+            archive_pattern = f"{origin_host_path}/-/archive/*"
+            archive_snaps = await self._search_cdx(session, archive_pattern, limit=5)
             if archive_snaps:
                 snap = archive_snaps[0]
                 wb_url = f"https://web.archive.org/web/{snap['timestamp']}/{snap['original']}"
@@ -68,7 +98,6 @@ class WaybackSource(BaseSource):
                         timestamp=self._format_timestamp(snap["timestamp"]),
                     )
                 )
-                break
 
         return results
 

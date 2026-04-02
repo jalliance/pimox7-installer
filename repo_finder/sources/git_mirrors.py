@@ -1,12 +1,28 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import httpx
 
 from .base import BaseSource, FoundResult
 from ..rate_limit import safe_get_or_none
 
+if TYPE_CHECKING:
+    from ..parser import RepoInfo
+
 
 MIRRORS = [
     {
+        "name": "GitHub",
+        "platform": "github",
+        "api_url": "https://api.github.com/repos/{owner}/{repo}",
+        "html_url": "https://github.com/{owner}/{repo}",
+        "clone_tmpl": "https://github.com/{owner}/{repo}.git",
+        "json_fields": {"description": "description", "updated": "updated_at"},
+    },
+    {
         "name": "GitLab",
+        "platform": "gitlab",
         "api_url": "https://gitlab.com/api/v4/projects/{owner}%2F{repo}",
         "html_url": "https://gitlab.com/{owner}/{repo}",
         "clone_tmpl": "https://gitlab.com/{owner}/{repo}.git",
@@ -14,6 +30,7 @@ MIRRORS = [
     },
     {
         "name": "Codeberg",
+        "platform": "codeberg",
         "api_url": "https://codeberg.org/api/v1/repos/{owner}/{repo}",
         "html_url": "https://codeberg.org/{owner}/{repo}",
         "clone_tmpl": "https://codeberg.org/{owner}/{repo}.git",
@@ -21,6 +38,7 @@ MIRRORS = [
     },
     {
         "name": "Bitbucket",
+        "platform": "bitbucket",
         "api_url": "https://api.bitbucket.org/2.0/repositories/{owner}/{repo}",
         "html_url": "https://bitbucket.org/{owner}/{repo}",
         "clone_tmpl": "https://bitbucket.org/{owner}/{repo}.git",
@@ -33,18 +51,22 @@ class GitMirrorsSource(BaseSource):
     name = "mirrors"
 
     async def search(
-        self, owner: str, repo: str, session: httpx.AsyncClient
+        self, info: RepoInfo, session: httpx.AsyncClient
     ) -> list[FoundResult]:
         results = []
         for mirror in MIRRORS:
-            result = await self._check_mirror(owner, repo, session, mirror)
+            # Skip the platform the repo came from — it's the one that's down
+            if mirror["platform"] == info.platform:
+                continue
+            result = await self._check_mirror(info.owner, info.repo, session, mirror)
             if result:
                 results.append(result)
 
         # Also check SourceHut (HTML check, no JSON API for anon)
-        srht = await self._check_sourcehut(owner, repo, session)
-        if srht:
-            results.append(srht)
+        if info.platform != "sourcehut":
+            srht = await self._check_sourcehut(info.owner, info.repo, session)
+            if srht:
+                results.append(srht)
 
         return results
 
@@ -89,7 +111,7 @@ class GitMirrorsSource(BaseSource):
             return FoundResult(
                 source_name="SourceHut Mirror",
                 url=url,
-                description=f"Mirror on SourceHut (git.sr.ht)",
+                description="Mirror on SourceHut (git.sr.ht)",
                 clone_url=f"https://git.sr.ht/~{owner}/{repo}",
                 confidence="high",
             )

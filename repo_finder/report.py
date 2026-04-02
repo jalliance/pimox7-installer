@@ -1,7 +1,11 @@
 import json
 import sys
+from typing import TYPE_CHECKING
 
 from .sources.base import FoundResult
+
+if TYPE_CHECKING:
+    from .parser import RepoInfo
 
 # ANSI colors
 BOLD = "\033[1m"
@@ -23,14 +27,17 @@ def _supports_color() -> bool:
     return hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
 
 
-def print_report(results: list[FoundResult], owner: str, repo: str) -> None:
+def print_report(results: list[FoundResult], info: "RepoInfo") -> None:
     color = _supports_color()
 
     def c(code: str, text: str) -> str:
         return f"{code}{text}{RESET}" if color else text
 
+    label = info.origin_url
     print()
-    print(c(BOLD, f"=== Archived copies of {owner}/{repo} ==="))
+    print(c(BOLD, f"=== Searching for copies of {label} ==="))
+    if info.platform != "github":
+        print(c(DIM, f"    (platform: {info.platform}, owner: {info.owner}, repo: {info.repo})"))
     print()
 
     if not results:
@@ -39,7 +46,7 @@ def print_report(results: list[FoundResult], owner: str, repo: str) -> None:
         print("Suggestions:")
         print("  - Try searching manually on https://web.archive.org/")
         print("  - Try https://archive.softwareheritage.org/")
-        print("  - Search GitHub for forks: https://github.com/search?q=" + repo)
+        print(f"  - Search GitHub for similar repos: https://github.com/search?q={info.repo}")
         return
 
     grouped: dict[str, list[FoundResult]] = {"high": [], "medium": [], "low": []}

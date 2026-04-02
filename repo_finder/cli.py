@@ -12,15 +12,19 @@ from .downloader import offer_download
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="repo-finder",
-        description="Find source code for deleted/taken-down GitHub repositories.",
+        description="Find source code for deleted/taken-down git repositories.",
         epilog="Examples:\n"
         "  python -m repo_finder octocat/hello-world\n"
         "  python -m repo_finder https://github.com/octocat/hello-world --json\n"
-        "  python -m repo_finder octocat/hello-world -d ./recovered\n"
+        "  python -m repo_finder https://gitlab.com/user/project\n"
+        "  python -m repo_finder https://bitbucket.org/owner/repo -d ./recovered\n"
         "  python -m repo_finder octocat/hello-world --sources forks swh\n",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("repo", help="GitHub repo as 'owner/repo' or full URL")
+    p.add_argument(
+        "repo",
+        help="Repo as 'owner/repo' (assumes GitHub) or full URL from any git host",
+    )
     p.add_argument(
         "--token",
         help="GitHub personal access token (or set GITHUB_TOKEN env var)",
@@ -55,7 +59,7 @@ def main():
     args = build_parser().parse_args()
 
     try:
-        owner, repo = parse_repo_input(args.repo)
+        info = parse_repo_input(args.repo)
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -64,8 +68,7 @@ def main():
 
     results = asyncio.run(
         run_search(
-            owner,
-            repo,
+            info,
             token=token,
             source_filter=args.sources,
             timeout=args.timeout,
@@ -75,7 +78,7 @@ def main():
     if args.json:
         print_json(results)
     else:
-        print_report(results, owner, repo)
+        print_report(results, info)
 
     if args.download:
         offer_download(results, args.download)

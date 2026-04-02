@@ -1,35 +1,44 @@
+from __future__ import annotations
+
+import re
+from typing import TYPE_CHECKING
+
 import httpx
 
 from .base import BaseSource, FoundResult
 from ..rate_limit import safe_get_or_none
+
+if TYPE_CHECKING:
+    from ..parser import RepoInfo
 
 
 class PackageRegistriesSource(BaseSource):
     name = "packages"
 
     async def search(
-        self, owner: str, repo: str, session: httpx.AsyncClient
+        self, info: RepoInfo, session: httpx.AsyncClient
     ) -> list[FoundResult]:
         results = []
-        target = f"github.com/{owner}/{repo}".lower()
+        # Match against the origin URL (works for any platform)
+        origin_pattern = re.sub(r"^https?://", "", info.origin_url).lower()
 
         # Check npm
-        npm_result = await self._check_npm(repo, target, session)
+        npm_result = await self._check_npm(info.repo, origin_pattern, session)
         if npm_result:
             results.append(npm_result)
 
         # Check PyPI
-        pypi_result = await self._check_pypi(repo, target, session)
+        pypi_result = await self._check_pypi(info.repo, origin_pattern, session)
         if pypi_result:
             results.append(pypi_result)
 
         # Check crates.io
-        crates_result = await self._check_crates(repo, target, session)
+        crates_result = await self._check_crates(info.repo, origin_pattern, session)
         if crates_result:
             results.append(crates_result)
 
         # Check RubyGems
-        gems_result = await self._check_rubygems(repo, target, session)
+        gems_result = await self._check_rubygems(info.repo, origin_pattern, session)
         if gems_result:
             results.append(gems_result)
 
@@ -67,7 +76,7 @@ class PackageRegistriesSource(BaseSource):
         return FoundResult(
             source_name="npm Registry",
             url=npm_url,
-            description=f"npm package '{repo}' v{version} linked to this GitHub repo",
+            description=f"npm package '{repo}' v{version} linked to this repo",
             clone_url=tarball,
             confidence="medium",
         )
@@ -82,7 +91,7 @@ class PackageRegistriesSource(BaseSource):
         data = resp.json()
         info = data.get("info", {})
 
-        # Check homepage and project URLs for GitHub match
+        # Check homepage and project URLs for match
         all_urls = []
         if info.get("home_page"):
             all_urls.append(info["home_page"])
@@ -105,7 +114,7 @@ class PackageRegistriesSource(BaseSource):
         return FoundResult(
             source_name="PyPI Registry",
             url=pypi_url,
-            description=f"PyPI package '{repo}' v{version} linked to this GitHub repo",
+            description=f"PyPI package '{repo}' v{version} linked to this repo",
             clone_url=tarball,
             confidence="medium",
         )
@@ -138,7 +147,7 @@ class PackageRegistriesSource(BaseSource):
         return FoundResult(
             source_name="crates.io Registry",
             url=crates_url,
-            description=f"Rust crate '{repo}' v{version} linked to this GitHub repo",
+            description=f"Rust crate '{repo}' v{version} linked to this repo",
             clone_url=dl_path,
             confidence="medium",
         )
@@ -166,7 +175,7 @@ class PackageRegistriesSource(BaseSource):
         return FoundResult(
             source_name="RubyGems Registry",
             url=gems_url,
-            description=f"Ruby gem '{repo}' v{version} linked to this GitHub repo",
+            description=f"Ruby gem '{repo}' v{version} linked to this repo",
             clone_url=gem_uri,
             confidence="medium",
         )

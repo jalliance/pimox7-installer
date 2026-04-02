@@ -1,7 +1,14 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import httpx
 
 from .base import BaseSource, FoundResult
 from ..rate_limit import safe_get_or_none
+
+if TYPE_CHECKING:
+    from ..parser import RepoInfo
 
 
 SWH_API = "https://archive.softwareheritage.org/api/1"
@@ -11,9 +18,11 @@ class SoftwareHeritageSource(BaseSource):
     name = "swh"
 
     async def search(
-        self, owner: str, repo: str, session: httpx.AsyncClient
+        self, info: RepoInfo, session: httpx.AsyncClient
     ) -> list[FoundResult]:
-        origin_url = f"https://github.com/{owner}/{repo}"
+        # Software Heritage indexes repos from many forges, not just GitHub.
+        # Use the original URL as the origin.
+        origin_url = info.origin_url
 
         # Step 1: Check if the origin exists in Software Heritage
         resp = await safe_get_or_none(

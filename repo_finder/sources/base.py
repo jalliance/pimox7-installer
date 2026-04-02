@@ -1,8 +1,11 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import httpx
+
+if TYPE_CHECKING:
+    from ..parser import RepoInfo
 
 
 @dataclass
@@ -23,7 +26,7 @@ class BaseSource(ABC):
 
     @abstractmethod
     async def search(
-        self, owner: str, repo: str, session: httpx.AsyncClient
+        self, info: "RepoInfo", session: httpx.AsyncClient
     ) -> list[FoundResult]:
         """Search this source for archived copies. Returns list of results."""
         ...

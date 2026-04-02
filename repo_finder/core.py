@@ -3,6 +3,7 @@ import sys
 
 import httpx
 
+from .parser import RepoInfo
 from .sources.base import FoundResult
 
 
@@ -10,8 +11,7 @@ CONFIDENCE_ORDER = {"high": 0, "medium": 1, "low": 2}
 
 
 async def run_search(
-    owner: str,
-    repo: str,
+    info: RepoInfo,
     token: str | None = None,
     source_filter: list[str] | None = None,
     timeout: int = 30,
@@ -41,7 +41,7 @@ async def run_search(
     async with httpx.AsyncClient(
         timeout=timeout, follow_redirects=True, headers=headers
     ) as session:
-        tasks = [source.search(owner, repo, session) for source in sources]
+        tasks = [source.search(info, session) for source in sources]
         results_nested = await asyncio.gather(*tasks, return_exceptions=True)
 
     results = []

@@ -1,25 +1,36 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import httpx
 
 from .base import BaseSource, FoundResult
 from ..rate_limit import safe_get_or_none
+
+if TYPE_CHECKING:
+    from ..parser import RepoInfo
 
 
 class GitHubForksSource(BaseSource):
     name = "forks"
 
     async def search(
-        self, owner: str, repo: str, session: httpx.AsyncClient
+        self, info: RepoInfo, session: httpx.AsyncClient
     ) -> list[FoundResult]:
+        # Fork search only works for GitHub repos
+        if info.platform != "github":
+            return []
+
         results = []
 
         # Strategy 1: Try the forks endpoint directly (works if repo still exists
         # or if GitHub redirects to the new upstream after deletion)
-        forks = await self._try_forks_endpoint(owner, repo, session)
+        forks = await self._try_forks_endpoint(info.owner, info.repo, session)
         results.extend(forks)
 
         # Strategy 2: Search API for repos with the same name that are forks
         if not results:
-            search_results = await self._try_search_api(owner, repo, session)
+            search_results = await self._try_search_api(info.owner, info.repo, session)
             results.extend(search_results)
 
         return results

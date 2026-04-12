@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Removed Repos — Repo Finder</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Repo Finder</h1>
+      <p class="subtitle">Repos that have been taken down</p>
+    </header>
+
+    {% include 'nav.html' %}
+
+    <div class="stats-bar">
+      <span class="stat">{{ stats.total }} watched</span>
+      <span class="stat stat-alive">{{ stats.alive }} alive</span>
+      <span class="stat stat-removed">{{ stats.removed }} removed</span>
+    </div>
+
+    {% if repos %}
+      <div class="repo-list">
+        {% for r in repos %}
+          <div class="result-card confidence-border-low">
+            <div class="result-header">
+              <span class="source-name">{{ r.owner }}/{{ r.repo }}</span>
+              <span class="platform-badge">{{ r.platform }}</span>
+            </div>
+            <p class="description">
+              Removed {{ r.removed_at[:10] if r.removed_at else 'unknown' }}
+              &middot; First tracked {{ r.first_seen[:10] }}
+              {% if r.last_checked %}
+                &middot; Last checked {{ r.last_checked[:10] }}
+              {% endif %}
+            </p>
+            <div class="result-links">
+              <a href="{{ r.origin_url }}" target="_blank" rel="noopener" class="link-btn link-btn-dead">Original (dead)</a>
+              <a href="/search?q={{ r.origin_url }}" class="link-btn">Find archives</a>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="no-results">
+        <h2>No removed repos detected yet</h2>
+        <p>Add repos to the watch list and run periodic scans to detect removals.</p>
+        <p style="margin-top: 0.5rem"><a href="/watched">Go to watched repos</a></p>
+      </div>
+    {% endif %}
+  </div>
+
+  <footer>
+    <p>
+      Run scans with: <code>python -m repo_finder.scanner scan</code>
+      &middot; <a href="/api/removed">JSON API</a>
+    </p>
+  </footer>
+</body>
+</html>

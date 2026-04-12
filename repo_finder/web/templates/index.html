@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Repo Finder — Find Deleted Repository Source Code</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Repo Finder</h1>
+      <p class="subtitle">Find source code for deleted or taken-down git repositories</p>
+    </header>
+
+    {% include 'nav.html' %}
+
+    <form action="/search" method="get" class="search-form">
+      <div class="search-box">
+        <input
+          type="text"
+          name="q"
+          placeholder="owner/repo or https://github.com/owner/repo"
+          value="{{ query or '' }}"
+          autofocus
+          autocomplete="off"
+          spellcheck="false"
+        >
+        <button type="submit">Search</button>
+      </div>
+      <div class="hints">
+        Supports GitHub, GitLab, Bitbucket, Codeberg, SourceHut, and more
+      </div>
+    </form>
+
+    {% if data %}
+      {% if data.error %}
+        <div class="error-box">{{ data.error }}</div>
+      {% elif data.results %}
+        <div class="results">
+          <h2>
+            Results for
+            <a href="{{ data.info.origin_url }}" target="_blank" rel="noopener">{{ data.info.origin_url }}</a>
+            {% if data.info.platform != 'github' %}
+              <span class="platform-badge">{{ data.info.platform }}</span>
+            {% endif %}
+          </h2>
+
+          {% set ns = namespace(current_conf='') %}
+          {% for r in data.results %}
+            {% if r.confidence != ns.current_conf %}
+              {% set ns.current_conf = r.confidence %}
+              <h3 class="confidence confidence-{{ r.confidence }}">{{ r.confidence | upper }} confidence</h3>
+            {% endif %}
+
+            <div class="result-card confidence-border-{{ r.confidence }}">
+              <div class="result-header">
+                <span class="source-name">{{ r.source_name }}</span>
+                {% if r.timestamp %}
+                  <span class="timestamp">{{ r.timestamp }}</span>
+                {% endif %}
+              </div>
+              <p class="description">{{ r.description }}</p>
+              <div class="result-links">
+                <a href="{{ r.url }}" target="_blank" rel="noopener" class="link-btn">Open</a>
+                {% if r.clone_url %}
+                  <code class="clone-cmd" title="Click to copy" onclick="navigator.clipboard.writeText(this.textContent)">git clone {{ r.clone_url }}</code>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+
+          <p class="summary">
+            Found {{ data.results | length }} result(s) across
+            {{ data.source_count }} source(s).
+          </p>
+        </div>
+      {% else %}
+        <div class="no-results">
+          <h2>No archived copies found</h2>
+          <p>Try these manual searches:</p>
+          <ul>
+            <li><a href="https://web.archive.org/web/*/{{ data.info.origin_url }}" target="_blank" rel="noopener">Wayback Machine</a></li>
+            <li><a href="https://archive.softwareheritage.org/browse/search/?q={{ data.info.origin_url }}" target="_blank" rel="noopener">Software Heritage</a></li>
+            <li><a href="https://github.com/search?q={{ data.info.repo }}" target="_blank" rel="noopener">GitHub Search</a></li>
+          </ul>
+        </div>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  <footer>
+    <p>
+      Also available as CLI: <code>python -m repo_finder owner/repo</code>
+      &middot; <a href="/api/search?q={{ query or 'owner/repo' }}">JSON API</a>
+    </p>
+  </footer>
+</body>
+</html>

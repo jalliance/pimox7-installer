@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Watched Repos — Repo Finder</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Repo Finder</h1>
+      <p class="subtitle">Repos being monitored for removal</p>
+    </header>
+
+    {% include 'nav.html' %}
+
+    <div class="stats-bar">
+      <span class="stat">{{ stats.total }} watched</span>
+      <span class="stat stat-alive">{{ stats.alive }} alive</span>
+      <span class="stat stat-removed">{{ stats.removed }} removed</span>
+    </div>
+
+    <form action="/watch" method="post" class="search-form" style="margin-bottom: 1.5rem;">
+      <div class="search-box">
+        <input
+          type="text"
+          name="url"
+          placeholder="Add repo to watch list: owner/repo or URL"
+          autocomplete="off"
+          spellcheck="false"
+        >
+        <button type="submit">Watch</button>
+      </div>
+    </form>
+
+    <div class="filter-bar">
+      <a href="/watched" class="filter-link {% if not current_filter %}active{% endif %}">All</a>
+      <a href="/watched?status=alive" class="filter-link {% if current_filter == 'alive' %}active{% endif %}">Alive</a>
+      <a href="/watched?status=removed" class="filter-link {% if current_filter == 'removed' %}active{% endif %}">Removed</a>
+    </div>
+
+    {% if repos %}
+      <div class="repo-list">
+        {% for r in repos %}
+          <div class="result-card {% if r.status == 'removed' %}confidence-border-low{% else %}confidence-border-high{% endif %}">
+            <div class="result-header">
+              <span class="source-name">{{ r.owner }}/{{ r.repo }}</span>
+              <span class="platform-badge">{{ r.platform }}</span>
+              {% if r.status == 'removed' %}
+                <span class="status-removed">REMOVED</span>
+              {% else %}
+                <span class="status-alive">ALIVE</span>
+              {% endif %}
+            </div>
+            <p class="description">
+              First tracked {{ r.first_seen[:10] }}
+              {% if r.last_checked %}
+                &middot; Last checked {{ r.last_checked[:10] }}
+              {% endif %}
+              {% if r.removed_at %}
+                &middot; Removed {{ r.removed_at[:10] }}
+              {% endif %}
+            </p>
+            <div class="result-links">
+              <a href="{{ r.origin_url }}" target="_blank" rel="noopener" class="link-btn">Visit</a>
+              {% if r.status == 'removed' %}
+                <a href="/search?q={{ r.origin_url }}" class="link-btn">Find archives</a>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="no-results">
+        <h2>No repos being watched</h2>
+        <p>Add repos above or import from a file:</p>
+        <p style="margin-top: 0.5rem"><code>python -m repo_finder.scanner add owner/repo</code></p>
+      </div>
+    {% endif %}
+  </div>
+
+  <footer>
+    <p>
+      Run scans: <code>python -m repo_finder.scanner scan</code>
+      &middot; <a href="/api/watched">JSON API</a>
+    </p>
+  </footer>
+</body>
+</html>

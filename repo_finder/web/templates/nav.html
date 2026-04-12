@@ -1,0 +1,5 @@
+<nav class="nav">
+  <a href="/" class="nav-link {% if request.endpoint == 'index' or request.endpoint == 'search' %}active{% endif %}">Search</a>
+  <a href="/removed" class="nav-link {% if request.endpoint == 'removed' %}active{% endif %}">Removed</a>
+  <a href="/watched" class="nav-link {% if request.endpoint == 'watched' %}active{% endif %}">Watched</a>
+</nav>

@@ -5,7 +5,7 @@ import sys
 
 import httpx
 
-from .db import init_db, list_repos, update_repo_status, get_stats
+from .db import init_db, get_unchecked_repos, update_repo_status, get_stats, count_repos
 
 
 # HTTP status codes that mean "repo is gone"
@@ -42,7 +42,7 @@ async def check_repo(
         except (httpx.TimeoutException, httpx.ConnectError):
             pass
 
-    # Fallback: HEAD/GET the origin URL directly (HTML page)
+    # Fallback: HEAD the origin URL directly (HTML page)
     try:
         resp = await session.head(repo["origin_url"], timeout=15)
         status = resp.status_code
@@ -54,26 +54,41 @@ async def check_repo(
         return True, None
 
 
-async def run_scan(token: str | None = None, db_path: str | None = None):
-    """Scan all watched repos and update their status."""
+async def run_scan(
+    token: str | None = None,
+    batch_limit: int = 1000,
+    quiet: bool = False,
+    db_path: str | None = None,
+):
+    """Scan watched repos and update their status.
+
+    Processes repos in order of staleness (least recently checked first).
+    batch_limit controls how many repos to check per invocation.
+    """
     init_db(db_path)
-    repos = list_repos(db_path=db_path)
+    repos = get_unchecked_repos(limit=batch_limit, db_path=db_path)
 
     if not repos:
-        print("No repos to scan. Add some with: python -m repo_finder.scanner add <url>")
+        total = count_repos(db_path=db_path)
+        if total == 0:
+            print("No repos to scan. Run 'discover' first or add repos manually.")
+        else:
+            print(f"All {total} repos recently checked.")
         return
 
-    print(f"Scanning {len(repos)} watched repos...")
+    total_count = count_repos(db_path=db_path)
+    if not quiet:
+        print(f"Scanning {len(repos)} repos (of {total_count} total)...")
 
     headers = {"Accept": "application/json"}
     if token:
         headers["Authorization"] = f"token {token}"
 
     newly_removed = []
+    checked = 0
 
     async with httpx.AsyncClient(follow_redirects=True, headers=headers) as session:
-        # Process in batches to respect rate limits
-        batch_size = 10
+        batch_size = 20
         for i in range(0, len(repos), batch_size):
             batch = repos[i : i + batch_size]
             tasks = [check_repo(session, r) for r in batch]
@@ -84,24 +99,33 @@ async def run_scan(token: str | None = None, db_path: str | None = None):
                 update_repo_status(
                     repo["id"], alive, http_status, db_path=db_path
                 )
+                checked += 1
+
                 if was_alive and not alive:
                     newly_removed.append(repo)
                     print(f"  REMOVED: {repo['origin_url']} (HTTP {http_status})")
-                elif alive:
-                    print(f"  OK: {repo['origin_url']}")
-                else:
-                    print(f"  still gone: {repo['origin_url']}")
+                elif not quiet:
+                    if alive:
+                        # Only print every Nth to avoid flood
+                        if checked % 100 == 0 or checked == len(repos):
+                            print(f"  [{checked}/{len(repos)}] checked...")
+                    else:
+                        print(f"  still gone: {repo['origin_url']}")
 
-            # Small delay between batches to be polite
+            # Delay between batches to respect rate limits
             if i + batch_size < len(repos):
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)
 
     stats = get_stats(db_path)
-    print(f"\nScan complete: {stats['alive']} alive, {stats['removed']} removed, {stats['total']} total")
+    print(
+        f"\nScan complete: checked {checked}, "
+        f"{stats['alive']} alive, {stats['removed']} removed, {stats['total']} total"
+    )
 
     if newly_removed:
         print(f"\n{len(newly_removed)} repo(s) newly removed:")
         for r in newly_removed:
-            print(f"  - {r['origin_url']}")
+            stars = r.get("stars", 0)
+            print(f"  - {r['origin_url']} ({stars} stars)")
 
     return newly_removed

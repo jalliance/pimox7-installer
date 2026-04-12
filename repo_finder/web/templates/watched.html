@@ -10,7 +10,7 @@
   <div class="container">
     <header>
       <h1>Repo Finder</h1>
-      <p class="subtitle">Repos being monitored for removal</p>
+      <p class="subtitle">All repos being monitored ({{ total }} total)</p>
     </header>
 
     {% include 'nav.html' %}
@@ -19,6 +19,9 @@
       <span class="stat">{{ stats.total }} watched</span>
       <span class="stat stat-alive">{{ stats.alive }} alive</span>
       <span class="stat stat-removed">{{ stats.removed }} removed</span>
+      {% if last_crawled %}
+        <span class="stat">crawled to {{ last_crawled }}</span>
+      {% endif %}
     </div>
 
     <form action="/watch" method="post" class="search-form" style="margin-bottom: 1.5rem;">
@@ -46,12 +49,17 @@
           <div class="result-card {% if r.status == 'removed' %}confidence-border-low{% else %}confidence-border-high{% endif %}">
             <div class="result-header">
               <span class="source-name">{{ r.owner }}/{{ r.repo }}</span>
-              <span class="platform-badge">{{ r.platform }}</span>
-              {% if r.status == 'removed' %}
-                <span class="status-removed">REMOVED</span>
-              {% else %}
-                <span class="status-alive">ALIVE</span>
-              {% endif %}
+              <div>
+                {% if r.stars %}
+                  <span class="star-badge">{{ r.stars }} stars</span>
+                {% endif %}
+                <span class="platform-badge">{{ r.platform }}</span>
+                {% if r.status == 'removed' %}
+                  <span class="status-removed">REMOVED</span>
+                {% else %}
+                  <span class="status-alive">ALIVE</span>
+                {% endif %}
+              </div>
             </div>
             <p class="description">
               First tracked {{ r.first_seen[:10] }}
@@ -71,18 +79,24 @@
           </div>
         {% endfor %}
       </div>
+
+      {% set pagination_params = "status=" + (current_filter or "") %}
+      {% include 'pagination.html' %}
     {% else %}
       <div class="no-results">
         <h2>No repos being watched</h2>
-        <p>Add repos above or import from a file:</p>
-        <p style="margin-top: 0.5rem"><code>python -m repo_finder.scanner add owner/repo</code></p>
+        <p>Add repos above, or run automatic discovery:</p>
+        <p style="margin-top: 0.5rem">
+          <code>python -m repo_finder.scanner discover --token $GITHUB_TOKEN</code>
+        </p>
       </div>
     {% endif %}
   </div>
 
   <footer>
     <p>
-      Run scans: <code>python -m repo_finder.scanner scan</code>
+      Discover: <code>python -m repo_finder.scanner discover</code>
+      &middot; Scan: <code>python -m repo_finder.scanner scan</code>
       &middot; <a href="/api/watched">JSON API</a>
     </p>
   </footer>

@@ -27,7 +27,12 @@
           <div class="result-card confidence-border-low">
             <div class="result-header">
               <span class="source-name">{{ r.owner }}/{{ r.repo }}</span>
-              <span class="platform-badge">{{ r.platform }}</span>
+              <div>
+                {% if r.stars %}
+                  <span class="star-badge">{{ r.stars }} stars</span>
+                {% endif %}
+                <span class="platform-badge">{{ r.platform }}</span>
+              </div>
             </div>
             <p class="description">
               Removed {{ r.removed_at[:10] if r.removed_at else 'unknown' }}
@@ -43,18 +48,24 @@
           </div>
         {% endfor %}
       </div>
+
+      {% set pagination_params = "" %}
+      {% include 'pagination.html' %}
     {% else %}
       <div class="no-results">
         <h2>No removed repos detected yet</h2>
-        <p>Add repos to the watch list and run periodic scans to detect removals.</p>
-        <p style="margin-top: 0.5rem"><a href="/watched">Go to watched repos</a></p>
+        <p>Run discovery and scans to populate this list:</p>
+        <p style="margin-top: 0.5rem">
+          <code>python -m repo_finder.scanner discover --token $GITHUB_TOKEN</code><br>
+          <code>python -m repo_finder.scanner scan --token $GITHUB_TOKEN</code>
+        </p>
       </div>
     {% endif %}
   </div>
 
   <footer>
     <p>
-      Run scans with: <code>python -m repo_finder.scanner scan</code>
+      Scan: <code>python -m repo_finder.scanner scan</code>
       &middot; <a href="/api/removed">JSON API</a>
     </p>
   </footer>
